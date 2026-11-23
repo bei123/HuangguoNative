@@ -63,10 +63,7 @@ struct PostDetailView: View {
 				Button {
 					openLightbox(url: detail.cover)
 				} label: {
-					HGCoverImage(url: detail.cover, cornerRadius: 0)
-						.frame(maxWidth: .infinity)
-						.frame(height: 220)
-						.clipped()
+					HGAdaptiveCoverImage(url: detail.cover, cornerRadius: 0, landscapeMaxHeight: 300)
 						.overlay(alignment: .bottomTrailing) {
 							Image(systemName: "arrow.up.left.and.arrow.down.right")
 								.font(.caption.weight(.semibold))
@@ -165,10 +162,7 @@ struct PostDetailView: View {
 						Button {
 							openLightbox(url: url)
 						} label: {
-							HGCoverImage(url: url, cornerRadius: 12)
-								.frame(maxWidth: .infinity)
-								.frame(height: 220)
-								.clipped()
+							HGAdaptiveCoverImage(url: url, cornerRadius: 12)
 								.overlay(alignment: .bottomTrailing) {
 									Image(systemName: "arrow.up.left.and.arrow.down.right")
 										.font(.caption2.weight(.semibold))

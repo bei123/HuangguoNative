@@ -50,7 +50,11 @@ struct PostsView: View {
 		.background(HGTheme.bg.ignoresSafeArea())
 		.navigationTitle("图文")
 		.navigationBarTitleDisplayMode(.inline)
-		.task { await bootstrap() }
+		.task {
+			// 从详情返回会再次触发 .task，已有分类/列表则不重拉
+			guard categories.isEmpty else { return }
+			await bootstrap()
+		}
 	}
 
 	@ViewBuilder

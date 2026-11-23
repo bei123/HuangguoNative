@@ -15,7 +15,9 @@ enum AppRoute: Hashable {
 	case posts
 	case postDetail(String)
 	case feed
+	case shorts
 	case more
 	case original
 	case sort(String) // route
+	case endpointLines
 }

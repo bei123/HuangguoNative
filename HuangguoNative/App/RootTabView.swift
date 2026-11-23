@@ -4,6 +4,7 @@ struct RootTabView: View {
 	@State private var tab: AppTab = .home
 	@State private var homePath = NavigationPath()
 	@State private var catePath = NavigationPath()
+	@State private var shortsPath = NavigationPath()
 	@State private var searchPath = NavigationPath()
 	@State private var minePath = NavigationPath()
 
@@ -15,6 +16,9 @@ struct RootTabView: View {
 			Tab("发现", systemImage: "square.grid.2x2", value: .category) {
 				navStack($catePath) { CategoryView(path: $catePath) }
 			}
+			Tab("刷剧", systemImage: "play.square.stack", value: .shorts) {
+				navStack($shortsPath) { ShortDramaFeedView(path: $shortsPath) }
+			}
 			Tab("搜索", systemImage: "magnifyingglass", value: .search) {
 				navStack($searchPath) { SearchView(path: $searchPath) }
 			}
@@ -24,7 +28,8 @@ struct RootTabView: View {
 		}
 		.tint(HGTheme.accent)
 		#if !HG_NO_LIQUID_GLASS
-		.tabBarMinimizeBehavior(.onScrollDown)
+		// 刷剧全屏分页：禁止 Tab 栏随滚动收起，避免可视高度变大后露出下一条
+		.tabBarMinimizeBehavior(tab == .shorts ? .never : .onScrollDown)
 		#endif
 	}
 
@@ -62,12 +67,16 @@ struct RootTabView: View {
 						PostDetailView(path: path, postId: id)
 					case .feed:
 						FeedView(path: path)
+					case .shorts:
+						ShortDramaFeedView(path: path)
 					case .more:
 						MoreView(path: path)
 					case .original:
 						OriginalListView(path: path)
 					case .sort(let route):
 						SortListView(path: path, route: route)
+					case .endpointLines:
+						EndpointLinesView()
 					}
 				}
 		}
@@ -75,5 +84,5 @@ struct RootTabView: View {
 }
 
 enum AppTab: Hashable {
-	case home, category, search, mine
+	case home, category, shorts, search, mine
 }

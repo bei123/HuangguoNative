@@ -84,6 +84,7 @@ struct MoreView: View {
 				Button("原创作品") { path.append(AppRoute.original) }
 				Button("图文") { path.append(AppRoute.posts) }
 				Button("推荐流") { path.append(AppRoute.feed) }
+				Button("刷剧") { path.append(AppRoute.shorts) }
 				Button("专题") { path.append(AppRoute.topics) }
 			}
 			Section("排序") {

@@ -39,7 +39,41 @@ struct MineView: View {
 					Divider().background(HGTheme.glassStroke)
 					mineRow("推荐流", system: "sparkles") { path.append(AppRoute.feed) }
 					Divider().background(HGTheme.glassStroke)
+					mineRow("刷剧", system: "play.square.stack") { path.append(AppRoute.shorts) }
+					Divider().background(HGTheme.glassStroke)
 					mineRow("更多", system: "ellipsis.circle") { path.append(AppRoute.more) }
+				}
+				.background(HGTheme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+				VStack(spacing: 0) {
+					Button {
+						path.append(AppRoute.endpointLines)
+					} label: {
+						HStack {
+							Image(systemName: "antenna.radiowaves.left.and.right")
+								.foregroundStyle(HGTheme.accent)
+								.frame(width: 28)
+								.accessibilityHidden(true)
+							VStack(alignment: .leading, spacing: 2) {
+								Text("线路切换")
+									.foregroundStyle(HGTheme.textPrimary)
+								Text(EndpointRouter.currentHost)
+									.font(.caption2)
+									.foregroundStyle(HGTheme.textMuted)
+									.lineLimit(1)
+							}
+							Spacer()
+							Image(systemName: "chevron.right")
+								.font(.caption.weight(.semibold))
+								.foregroundStyle(HGTheme.textMuted)
+								.accessibilityHidden(true)
+						}
+						.padding(.horizontal, 16)
+						.frame(minHeight: 52)
+						.contentShape(Rectangle())
+					}
+					.buttonStyle(.plain)
+					.accessibilityLabel("线路切换")
 				}
 				.background(HGTheme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
 

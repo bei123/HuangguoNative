@@ -160,11 +160,24 @@ extension APIService {
 	}
 
 	func fetchComments(videoId: String, page: Int) async throws -> PageResult<CommentItem> {
-		let raw = try await edgeCall(.dynamic, "GET", "/api/videos/\(enc(videoId))/comments?page=\(page)", body: "", auth: "")
+		let raw = try await edgeCall(.dynamic, "GET", "/api/videos/\(enc(videoId))/comments?page=\(page)&size=50", body: "", auth: "")
 		guard let data = raw["data"] as? [String: Any] else { return PageResult(items: [], page: 1, pages: 1, total: 0) }
-		let items = APIJSON.arr(data["items"]).compactMap { parseComment($0) }
+		let rawItems: [Any] = {
+			let a = APIJSON.arr(data["items"])
+			if !a.isEmpty { return a }
+			let b = APIJSON.arr(data["list"])
+			if !b.isEmpty { return b }
+			return APIJSON.arr(data["comments"])
+		}()
+		let items = rawItems.enumerated().compactMap { idx, any in parseComment(any, fallbackIndex: idx) }
 		let pag = data["pagination"] as? [String: Any]
-		return PageResult(items: items, page: APIJSON.int(pag, "page"), pages: max(APIJSON.int(pag, "pages"), 1), total: APIJSON.int(pag, "total"))
+		var pages = APIJSON.int(pag, "pages")
+		let total = APIJSON.int(pag, "total")
+		let cur = max(APIJSON.int(pag, "page"), page)
+		if pages <= 0, total > 0, !items.isEmpty {
+			pages = max(1, Int(ceil(Double(total) / Double(max(items.count, 1)))))
+		}
+		return PageResult(items: items, page: cur, pages: max(pages, 1), total: total)
 	}
 
 	func postComment(videoId: String, text: String, ep: Int) async throws {
@@ -451,19 +464,34 @@ extension APIService {
 		)
 	}
 
-	private func parseComment(_ any: Any?) -> CommentItem? {
+	private func parseComment(_ any: Any?, fallbackIndex: Int = 0) -> CommentItem? {
 		guard let d = any as? [String: Any] else { return nil }
 		let user = d["user"] as? [String: Any]
-		let id = APIJSON.string(d, "id")
-		if id.isEmpty { return nil }
+		var id = APIJSON.string(d, "id", "comment_id")
+		if id.isEmpty {
+			let n = APIJSON.int(d, "id", "comment_id")
+			if n != 0 { id = String(n) }
+		}
+		let text = APIJSON.string(d, "text", "content", "body")
+		if id.isEmpty {
+			// 无稳定 id 时仍展示，避免整页评论被 compactMap 丢掉
+			let uid = APIJSON.int(user, "id")
+			let created = APIJSON.string(d, "created_at", "createdAt")
+			id = "\(uid)-\(created)-\(fallbackIndex)-\(text.hashValue)"
+		}
+		var userName = APIJSON.string(user, "nickname", "name")
+		if userName.isEmpty {
+			userName = APIJSON.string(d, "nickname", "name", "user_name")
+		}
+		if userName.isEmpty { userName = "用户" }
 		return CommentItem(
 			id: id,
 			userId: APIJSON.int(user, "id"),
-			userName: APIJSON.string(user, "nickname", "name"),
+			userName: userName,
 			avatar: absImg(APIJSON.string(user, "avatar")),
-			text: APIJSON.string(d, "text", "content"),
-			createdAt: APIJSON.string(d, "created_at"),
-			likeCount: APIJSON.int(d, "like", "likes"),
+			text: text,
+			createdAt: APIJSON.string(d, "created_at", "createdAt"),
+			likeCount: APIJSON.int(d, "like", "likes", "like_count"),
 			ep: APIJSON.int(d, "ep")
 		)
 	}

@@ -1,15 +1,21 @@
 import Foundation
 
+struct EndpointLine: Identifiable, Sendable, Equatable {
+	var id: String { host }
+	let host: String
+	/// 探测 RTT（毫秒）；`nil` 表示超时或不可用
+	let latencyMs: Double?
+	var isReachable: Bool { latencyMs != nil }
+}
+
 /// 多镜像域名测速：并行探测，选用最快可用地址
 actor EndpointRouter {
 	static let shared = EndpointRouter()
 
-	/// 主站 + 备用访问地址（去重）
+	/// 主站 + 备用访问地址（须支持 POST `/api/*/request`；静态 Pages 等会 405，勿列入）
 	static let candidates: [String] = [
 		"huangguoai.com",
-		"hgai29.com",
 		"ea3.aqkmowihz.cc",
-		"huangguo88.pages.dev",
 		"wvyj3.aqkmowihz.cc",
 		"hccm.aqkmowihz.cc",
 		"fs0k.kplsifomz.cc",
@@ -24,6 +30,7 @@ actor EndpointRouter {
 	private var host: String
 	private var probedAt: Date?
 	private var probing: Task<String, Never>?
+	private var lastLines: [EndpointLine] = []
 
 	nonisolated static var currentHost: String { HostCache.shared.host }
 	nonisolated static var baseURL: String { "https://\(currentHost)" }
@@ -36,9 +43,19 @@ actor EndpointRouter {
 		if let ts = UserDefaults.standard.object(forKey: Self.probedAtKey) as? Date {
 			probedAt = ts
 		}
+		// 缓存了已剔除的坏域名时，立刻作废，下次 ensureReady 重测
+		// init 为 nonisolated，不能直接调 actor 隔离的 persist()
+		if !Self.candidates.contains(saved) {
+			probedAt = nil
+			Self.writeDefaults(host: host, probedAt: nil)
+		}
 	}
 
 	func currentBaseURL() -> String { "https://\(host)" }
+
+	func currentHostName() -> String { host }
+
+	func cachedLines() -> [EndpointLine] { lastLines }
 
 	/// 启动或请求前调用；有缓存且未过期则跳过
 	@discardableResult
@@ -52,7 +69,7 @@ actor EndpointRouter {
 		if let probing {
 			return await probing.value
 		}
-		let task = Task { await self.probeAll() }
+		let task = Task { await self.probeAll(selectBest: true) }
 		probing = task
 		let winner = await task.value
 		probing = nil
@@ -65,73 +82,116 @@ actor EndpointRouter {
 		return await ensureReady(force: true)
 	}
 
-	private func probeAll() async -> String {
+	/// 测速全部线路；`selectBest` 为真时自动切到最快可用
+	@discardableResult
+	func probeAll(selectBest: Bool) async -> String {
 		let hosts = Self.candidates
 		print("[endpoint] probing \(hosts.count) hosts…")
 
-		let results: [(String, Double)] = await withTaskGroup(of: (String, Double)?.self) { group in
+		let results: [EndpointLine] = await withTaskGroup(of: EndpointLine.self) { group in
 			for h in hosts {
 				group.addTask {
 					await Self.measure(host: h)
 				}
 			}
-			var out: [(String, Double)] = []
+			var out: [EndpointLine] = []
 			for await item in group {
-				if let item { out.append(item) }
+				out.append(item)
 			}
-			return out
+			return out.sorted { a, b in
+				switch (a.latencyMs, b.latencyMs) {
+				case let (x?, y?): return x < y
+				case (_?, nil): return true
+				case (nil, _?): return false
+				case (nil, nil): return a.host < b.host
+				}
+			}
 		}
+		lastLines = results
 
-		guard let best = results.min(by: { $0.1 < $1.1 }) else {
-			print("[endpoint] all failed, keep \(host)")
+		let reachable = results.filter(\.isReachable)
+		if selectBest, let best = reachable.first {
+			await applyHost(best.host, clearSessionIfChanged: true)
+		} else {
 			probedAt = Date()
 			persist()
-			return host
 		}
 
-		let changed = best.0 != host
-		host = best.0
-		probedAt = Date()
-		HostCache.shared.host = host
-		persist()
 		let summary = results
-			.sorted { $0.1 < $1.1 }
-			.map { "\($0.0)=\(String(format: "%.0f", $0.1))ms" }
+			.map { line in
+				if let ms = line.latencyMs {
+					return "\(line.host)=\(String(format: "%.0f", ms))ms"
+				}
+				return "\(line.host)=fail"
+			}
 			.joined(separator: ", ")
-		print("[endpoint] winner=\(host) (\(String(format: "%.0f", best.1))ms) [\(summary)]")
-		if changed {
-			await EdgeClient.shared.clearSessions()
-		}
+		print("[endpoint] current=\(host) [\(summary)]")
 		return host
 	}
 
+	/// 用户手动切换线路
+	func selectHost(_ newHost: String) async {
+		guard Self.candidates.contains(newHost) else { return }
+		await applyHost(newHost, clearSessionIfChanged: true)
+	}
+
+	private func applyHost(_ newHost: String, clearSessionIfChanged: Bool) async {
+		let changed = newHost != host
+		host = newHost
+		probedAt = Date()
+		HostCache.shared.host = host
+		persist()
+		if changed, clearSessionIfChanged {
+			await EdgeClient.shared.clearSessions()
+		}
+	}
+
 	private func persist() {
-		UserDefaults.standard.set(host, forKey: Self.hostKey)
+		Self.writeDefaults(host: host, probedAt: probedAt)
+	}
+
+	nonisolated private static func writeDefaults(host: String, probedAt: Date?) {
+		UserDefaults.standard.set(host, forKey: hostKey)
 		if let probedAt {
-			UserDefaults.standard.set(probedAt, forKey: Self.probedAtKey)
+			UserDefaults.standard.set(probedAt, forKey: probedAtKey)
+		} else {
+			UserDefaults.standard.removeObject(forKey: probedAtKey)
 		}
 	}
 
 	/// 对边缘握手入口做轻量 POST，测真实 API 可达性与延迟
-	nonisolated private static func measure(host: String) async -> (String, Double)? {
-		guard let url = URL(string: "https://\(host)/api/public/request") else { return nil }
+	nonisolated private static func measure(host: String) async -> EndpointLine {
+		guard let url = URL(string: "https://\(host)/api/public/request") else {
+			return EndpointLine(host: host, latencyMs: nil)
+		}
 		var req = URLRequest(url: url, timeoutInterval: probeTimeout)
 		req.httpMethod = "POST"
 		req.setValue("application/json", forHTTPHeaderField: "Content-Type")
 		req.setValue("application/json", forHTTPHeaderField: "Accept")
-		// 非法 hello 也会很快返回，足以证明线路通
+		// 非法 hello：真边缘会很快回 JSON（多为 400 invalid_request）
 		req.httpBody = Data(#"{"v":1,"type":"hello"}"#.utf8)
 
 		let start = CFAbsoluteTimeGetCurrent()
 		do {
-			let (_, resp) = try await URLSession.shared.data(for: req)
+			let (data, resp) = try await URLSession.shared.data(for: req)
 			let ms = (CFAbsoluteTimeGetCurrent() - start) * 1000
 			let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
-			// 2xx/4xx 都说明主机可达；5xx/超时不算
-			guard (200..<500).contains(code) else { return nil }
-			return (host, ms)
+			// 静态站 / 错误镜像常见：405 Method Not Allowed、404 HTML —— 绝不能当可用线路
+			guard (200..<500).contains(code), code != 405, code != 404 else {
+				return EndpointLine(host: host, latencyMs: nil)
+			}
+			let text = String(data: data, encoding: .utf8) ?? ""
+			let looksLikeEdge =
+				text.contains("\"error\"")
+				|| text.contains("\"kid\"")
+				|| text.contains("\"type\"")
+				|| text.contains("invalid_request")
+			guard looksLikeEdge else {
+				return EndpointLine(host: host, latencyMs: nil)
+			}
+			return EndpointLine(host: host, latencyMs: ms)
 		} catch {
-			return nil
+			return EndpointLine(host: host, latencyMs: nil)
 		}
 	}
 }
@@ -146,6 +206,7 @@ private final class HostCache: @unchecked Sendable {
 		set { lock.lock(); _host = newValue; lock.unlock() }
 	}
 	private init() {
-		_host = UserDefaults.standard.string(forKey: "hg_edge_host") ?? "huangguoai.com"
+		let saved = UserDefaults.standard.string(forKey: "hg_edge_host") ?? "huangguoai.com"
+		_host = EndpointRouter.candidates.contains(saved) ? saved : "huangguoai.com"
 	}
 }

@@ -24,6 +24,9 @@ struct DetailView: View {
 	@State private var comments: [CommentItem] = []
 	@State private var commentText = ""
 	@State private var showComments = false
+	@State private var commentsPage = 1
+	@State private var commentsPages = 1
+	@State private var commentsLoadingMore = false
 	@State private var related: [VideoCard] = []
 	@State private var toast = ""
 	@State private var acting = false
@@ -34,6 +37,8 @@ struct DetailView: View {
 	/// 用引用类型同步标记全屏，避免 @State 更新晚于 onDisappear 误杀播放器
 	@State private var fullscreenGate = FullscreenGate()
 	@State private var loadedVideoId: String?
+	/// 换集 / 重入时丢弃过期的 play() 结果，避免旧任务把状态改乱
+	@State private var playGeneration = 0
 
 	var body: some View {
 		VStack(spacing: 0) {
@@ -505,10 +510,29 @@ struct DetailView: View {
 						}
 						.padding(.horizontal, 16)
 						.padding(.vertical, 12)
+						.onAppear {
+							if index >= comments.count - 3 {
+								Task { await loadMoreComments() }
+							}
+						}
 
 						if index < comments.count - 1 {
 							Divider().background(HGTheme.glassStroke).padding(.leading, 16)
 						}
+					}
+					if commentsLoadingMore {
+						ProgressView()
+							.tint(HGTheme.accent)
+							.frame(maxWidth: .infinity)
+							.padding(.vertical, 12)
+					} else if commentsPage < commentsPages {
+						Button("加载更多评论") {
+							Task { await loadMoreComments() }
+						}
+						.font(.subheadline.weight(.semibold))
+						.foregroundStyle(HGTheme.accent)
+						.frame(maxWidth: .infinity)
+						.padding(.vertical, 12)
 					}
 				}
 			}
@@ -539,8 +563,11 @@ struct DetailView: View {
 	}
 
 	private func load(force: Bool) async {
-		// 全屏进出会让 .task 重入；已有详情/播放器则跳过，禁止重新拉流（会从头播）
+		// 全屏进出会让 .task 重入；已有详情则跳过重拉。若还没播起来，补一次自动播。
 		if !force, loadedVideoId == videoId, detail != nil {
+			if player == nil, !playLoading, let first = detail?.episodes.first(where: { !$0.locked }) {
+				await play(ep: first.epNum, locked: false)
+			}
 			return
 		}
 		loading = true
@@ -552,20 +579,32 @@ struct DetailView: View {
 			let vid = Int(d.id) ?? -1
 			liked = d.liked || SessionStore.shared.user.likeVideoIds.contains(vid)
 			collected = d.collected || SessionStore.shared.user.favoriteVideoIds.contains(vid)
-			if SessionStore.shared.isLoggedIn {
-				if let my = try? await APIService.shared.fetchMyRating(videoId: videoId, ep: 1), my > 0 {
-					myScore = my
+			loading = false
+
+			// 先自动播，不要被 visit / 评分 / 相关推荐拖住（否则会一直停在「准备播放…」）
+			if player == nil {
+				if let first = d.episodes.first(where: { !$0.locked }) {
+					await play(ep: first.epNum, locked: false)
+				} else if d.episodes.isEmpty {
+					playTip = "暂无分集"
+				} else {
+					playTip = "暂无可播分集"
 				}
 			}
-			await APIService.shared.visitVideo(id: videoId)
-			related = ((try? await APIService.shared.fetchRelated(videoId: videoId)) ?? []).uniquedPreservingOrder()
-			if player == nil, let first = d.episodes.first(where: { !$0.locked }) {
-				await play(ep: first.epNum, locked: false)
+
+			Task { await APIService.shared.visitVideo(id: videoId) }
+			if SessionStore.shared.isLoggedIn {
+				Task {
+					if let my = try? await APIService.shared.fetchMyRating(videoId: videoId, ep: 1), my > 0 {
+						myScore = my
+					}
+				}
 			}
+			related = ((try? await APIService.shared.fetchRelated(videoId: videoId)) ?? []).uniquedPreservingOrder()
 		} catch {
 			errorText = error.localizedDescription
+			loading = false
 		}
-		loading = false
 	}
 
 	private func play(ep: Int, locked: Bool) async {
@@ -573,34 +612,115 @@ struct DetailView: View {
 			playTip = "该集暂不可播"
 			return
 		}
+		playGeneration += 1
+		let gen = playGeneration
 		playLoading = true
 		currentEp = ep
 		playTip = "获取播放地址…"
+		defer {
+			if gen == playGeneration {
+				playLoading = false
+			}
+		}
 		do {
 			let info = try await APIService.shared.fetchPlayback(videoId: videoId, ep: ep)
-			guard let url = URL(string: info.url) else {
+			guard gen == playGeneration else { return }
+			guard let url = URL(string: info.url), !info.url.isEmpty else {
 				playTip = "播放地址无效"
-				playLoading = false
 				return
 			}
 			playURL = url
 			expiresAt = info.expiresAt
 			hevcURL = URL(string: info.hevcURL)
 			await AudioSession.activatePlaybackAsync()
-			let chosen = (useHEVC ? hevcURL : nil) ?? url
-			let p = AVPlayer(url: chosen)
-			p.isMuted = false
-			p.volume = 1
-			player?.pause()
-			player = p
-			p.play()
-			playTip = ""
-			await APIService.shared.syncHistory(videoId: videoId, ep: ep)
+			guard gen == playGeneration else { return }
+
+			// 主线路失败时自动换备选（HEVC ↔ H.264）
+			var candidates: [URL] = []
+			if useHEVC, let h = hevcURL { candidates.append(h) }
+			candidates.append(url)
+			if let h = hevcURL, !candidates.contains(h) { candidates.append(h) }
+
+			var started = false
+			for (idx, chosen) in candidates.enumerated() {
+				guard gen == playGeneration else { return }
+				playTip = idx == 0 ? "缓冲中…" : "换线重试…"
+				let p = makeConfiguredPlayer(url: chosen)
+				player?.pause()
+				player = p
+				let ready = await waitForPlayerItemReady(p.currentItem, timeout: 18)
+				guard gen == playGeneration else { return }
+				if ready {
+					p.play()
+					playTip = ""
+					started = true
+					break
+				}
+				p.pause()
+			}
+
+			if started {
+				await APIService.shared.syncHistory(videoId: videoId, ep: ep)
+			} else {
+				player = nil
+				playTip = "加载超时，点选集重试"
+			}
 		} catch {
-			playTip = "播放失败"
+			guard gen == playGeneration else { return }
+			playTip = "播放失败，点选集重试"
 			playURL = nil
 		}
-		playLoading = false
+	}
+
+	private func makeConfiguredPlayer(url: URL) -> AVPlayer {
+		let headers: [String: String] = [
+			"Referer": EndpointRouter.referer,
+			"User-Agent": "HuangguoNative/1.0",
+		]
+		let asset = AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": headers])
+		let item = AVPlayerItem(asset: asset)
+		item.preferredForwardBufferDuration = 4
+		let p = AVPlayer(playerItem: item)
+		p.automaticallyWaitsToMinimizeStalling = true
+		p.isMuted = false
+		p.volume = 1
+		return p
+	}
+
+	/// 等 HLS 真正 ready / failed，避免 create 后立刻 play 却一直卡住
+	private func waitForPlayerItemReady(_ item: AVPlayerItem?, timeout: TimeInterval) async -> Bool {
+		guard let item else { return false }
+		if item.status == .readyToPlay { return true }
+		if item.status == .failed { return false }
+
+		return await withCheckedContinuation { continuation in
+			final class Box: @unchecked Sendable {
+				var obs: NSKeyValueObservation?
+				var done = false
+				let lock = NSLock()
+				func finish(_ ok: Bool, _ cont: CheckedContinuation<Bool, Never>) {
+					lock.lock()
+					defer { lock.unlock() }
+					guard !done else { return }
+					done = true
+					obs?.invalidate()
+					obs = nil
+					cont.resume(returning: ok)
+				}
+			}
+			let box = Box()
+			box.obs = item.observe(\.status, options: [.initial, .new]) { item, _ in
+				switch item.status {
+				case .readyToPlay: box.finish(true, continuation)
+				case .failed: box.finish(false, continuation)
+				default: break
+				}
+			}
+			Task {
+				try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+				box.finish(item.status == .readyToPlay, continuation)
+			}
+		}
 	}
 
 	private func replayCurrent() async {
@@ -685,7 +805,35 @@ struct DetailView: View {
 	private func loadComments() async {
 		do {
 			let r = try await APIService.shared.fetchComments(videoId: videoId, page: 1)
-			comments = r.items
+			comments = r.items.uniquedPreservingOrder()
+			commentsPage = max(r.page, 1)
+			commentsPages = max(r.pages, 1)
+			if commentsPages <= 1, r.items.count >= 20 {
+				commentsPages = 2
+			}
+		} catch {
+			flashToast(error.localizedDescription)
+		}
+	}
+
+	@MainActor
+	private func loadMoreComments() async {
+		guard !commentsLoadingMore, commentsPage < commentsPages else { return }
+		commentsLoadingMore = true
+		defer { commentsLoadingMore = false }
+		let next = commentsPage + 1
+		do {
+			let r = try await APIService.shared.fetchComments(videoId: videoId, page: next)
+			if r.items.isEmpty {
+				commentsPages = commentsPage
+			} else {
+				comments.mergeUnique(r.items)
+				commentsPage = max(r.page, next)
+				commentsPages = max(r.pages, commentsPages)
+				if r.items.count >= 20, commentsPage >= commentsPages {
+					commentsPages = commentsPage + 1
+				}
+			}
 		} catch {
 			flashToast(error.localizedDescription)
 		}
