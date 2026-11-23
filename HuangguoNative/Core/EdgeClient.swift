@@ -4,10 +4,10 @@ import Foundation
 actor EdgeClient {
 	static let shared = EdgeClient()
 
-	private let baseURL = "https://huangguoai.com"
 	private let visitorKey = "hg_visitor_id"
 	private var sessions: [String: Session] = [:]
 	private var handshaking: [String: [CheckedContinuation<Session, Error>]] = [:]
+	private var failStreak = 0
 
 	struct Session: Sendable {
 		var privB64: String
@@ -27,6 +27,7 @@ actor EdgeClient {
 	}
 
 	func edgeRequest(scope: String, method: String, path: String, bodyJson: String, authToken: String) async throws -> String {
+		_ = await EndpointRouter.shared.ensureReady()
 		let ticket = DxCrypto.nextScopeTicket(scope)
 		var guardCount = 0
 		while DxCrypto.scopeServing(scope) + 1 < ticket {
@@ -37,7 +38,21 @@ actor EdgeClient {
 			}
 		}
 		defer { DxCrypto.advanceScopeServing(scope, ticket) }
-		return try await edgeRequestLocked(scope: scope, method: method, path: path, bodyJson: bodyJson, authToken: authToken)
+		do {
+			let out = try await edgeRequestLocked(scope: scope, method: method, path: path, bodyJson: bodyJson, authToken: authToken)
+			failStreak = 0
+			return out
+		} catch {
+			failStreak += 1
+			// 连续失败换一条更快/可用线路再试一次
+			if failStreak >= 2 {
+				failStreak = 0
+				_ = await EndpointRouter.shared.invalidateAndReprobe()
+				clearSessions()
+				return try await edgeRequestLocked(scope: scope, method: method, path: path, bodyJson: bodyJson, authToken: authToken)
+			}
+			throw error
+		}
 	}
 
 	private func edgeRequestLocked(scope: String, method: String, path: String, bodyJson: String, authToken: String) async throws -> String {
@@ -53,6 +68,10 @@ actor EdgeClient {
 			session = try await handshake(scope)
 			return try await callOnce(scope: scope, session: &session, method: method, path: path, bodyJson: bodyJson, authToken: authToken)
 		}
+	}
+
+	private func baseURL() async -> String {
+		await EndpointRouter.shared.currentBaseURL()
 	}
 
 	private func nowSec() -> Int { Int(Date().timeIntervalSince1970) }
@@ -106,8 +125,9 @@ actor EdgeClient {
 			throw err("keypair empty")
 		}
 		let localAtHello = nowSec()
+		let base = await baseURL()
 		let helloRes = try await postJson(
-			url: "\(baseURL)/api/\(scope)/request",
+			url: "\(base)/api/\(scope)/request",
 			body: ["v": 1, "type": "hello", "client_pub": pubB64url]
 		)
 		guard let kid = helloRes["kid"] as? String, !kid.isEmpty,
@@ -150,7 +170,8 @@ actor EdgeClient {
 		]
 		let callRes: [String: Any]
 		do {
-			callRes = try await postJson(url: "\(baseURL)/api/\(scope)/request", body: callBody)
+			let base = await baseURL()
+			callRes = try await postJson(url: "\(base)/api/\(scope)/request", body: callBody)
 		} catch {
 			if "\(error)".contains("session_expired") { throw err("session_expired") }
 			throw error

@@ -42,6 +42,7 @@
 		EA262766AEE851130DE29909 /* ModelsExtra.swift in Sources */ = {isa = PBXBuildFile; fileRef = D89F6F7D887449C82865C3D0 /* ModelsExtra.swift */; };
 		EAE632126A22E9B8CE40ED94 /* FeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B897D4A61736937C457E2A83 /* FeedView.swift */; };
 		ECD098589633B0D674EAB4CA /* EdgeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E298F8366EBDC5A6F5EC6015 /* EdgeClient.swift */; };
+		E4F5A6B7C8D9012345AB0002 /* EndpointRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4F5A6B7C8D9012345AB0001 /* EndpointRouter.swift */; };
 		F8F964F3DCFE84D27D0751A1 /* DetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17C0DF88BDB6EA8DCE324969 /* DetailView.swift */; };
 /* End PBXBuildFile section */
 
@@ -80,6 +81,7 @@
 		D65D6999A21DDED726416110 /* APIService+Extra.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIService+Extra.swift"; sourceTree = "<group>"; };
 		D89F6F7D887449C82865C3D0 /* ModelsExtra.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelsExtra.swift; sourceTree = "<group>"; };
 		E298F8366EBDC5A6F5EC6015 /* EdgeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EdgeClient.swift; sourceTree = "<group>"; };
+		E4F5A6B7C8D9012345AB0001 /* EndpointRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EndpointRouter.swift; sourceTree = "<group>"; };
 		F144F7C3EFB5B68BBC38535A /* InfiniteScrollFooter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InfiniteScrollFooter.swift; sourceTree = "<group>"; };
 		A8F3E21C9D4B7A10E55C001 /* SkeletonViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkeletonViews.swift; sourceTree = "<group>"; };
 		C1D2E3F4A5B60718293A000 /* HGImageLightbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HGImageLightbox.swift; sourceTree = "<group>"; };
@@ -113,6 +115,7 @@
 				02A8A2A36BFE8F5A1994826E /* AudioSession.swift */,
 				5B4213AD0B176AEE235F8BAD /* DxCrypto.swift */,
 				E298F8366EBDC5A6F5EC6015 /* EdgeClient.swift */,
+				E4F5A6B7C8D9012345AB0001 /* EndpointRouter.swift */,
 				9123C816189AAE280337AA68 /* Models.swift */,
 				D89F6F7D887449C82865C3D0 /* ModelsExtra.swift */,
 				2A3F630A68E14A038B3287B2 /* SessionStore.swift */,
@@ -382,6 +385,7 @@
 				663A0FA00B0EA5E8942B4FB9 /* AudioSession.swift in Sources */,
 				3368A6C9B7242BCD6DDAAA49 /* DxCrypto.swift in Sources */,
 				ECD098589633B0D674EAB4CA /* EdgeClient.swift in Sources */,
+				E4F5A6B7C8D9012345AB0002 /* EndpointRouter.swift in Sources */,
 				BA0F66DFDA6E6937AC8B3E19 /* Models.swift in Sources */,
 				EA262766AEE851130DE29909 /* ModelsExtra.swift in Sources */,
 				21838FF27DB0BB76F0AFE866 /* SessionStore.swift in Sources */,

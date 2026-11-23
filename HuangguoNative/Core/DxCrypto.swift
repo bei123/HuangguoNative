@@ -143,7 +143,7 @@ public class DxCrypto {
 			fatalError("bad image url")
 		}
 		var req = URLRequest(url: u, timeoutInterval: 25)
-		req.setValue("https://huangguoai.com/", forHTTPHeaderField: "Referer")
+		req.setValue(EndpointRouter.referer, forHTTPHeaderField: "Referer")
 		req.setValue("HuangguoAndroid/1.0", forHTTPHeaderField: "User-Agent")
 		let sem = DispatchSemaphore(value: 0)
 		var rawData: Data?

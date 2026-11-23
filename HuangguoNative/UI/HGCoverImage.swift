@@ -44,7 +44,7 @@ struct HGCoverImage: View {
 		}
 		do {
 			var req = URLRequest(url: u, timeoutInterval: 25)
-			req.setValue("https://huangguoai.com/", forHTTPHeaderField: "Referer")
+			req.setValue(EndpointRouter.referer, forHTTPHeaderField: "Referer")
 			req.setValue("HuangguoNative/1.0", forHTTPHeaderField: "User-Agent")
 			let (data, resp) = try await URLSession.shared.data(for: req)
 			let code = (resp as? HTTPURLResponse)?.statusCode ?? 0

@@ -10,7 +10,6 @@ enum EdgeScope: String {
 actor APIService {
 	static let shared = APIService()
 
-	private let base = "https://huangguoai.com"
 	private let picCDN = "https://pic.qnlycc.cn"
 	/// 分类探测较慢，缓存后避免每次进发现页都全量探测
 	private var cachedVideoCategories: [CategoryItem]?
