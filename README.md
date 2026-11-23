@@ -2,7 +2,9 @@
 
 原生 SwiftUI iOS 客户端。对接黄果短剧站 `dx150-edge-v1` 加密网关，覆盖浏览、播放、账号与互动。
 
-仓库：https://github.com/bei123/HuangguoNative
+仓库：https://github.com/bei123/HuangguoNative  
+
+协议：[MIT](./LICENSE)
 
 ## 环境
 
