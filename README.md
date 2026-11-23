@@ -115,3 +115,4 @@ mkdir -p build/Payload && cp -R "$APP" build/Payload/
 
 - 登录态存在本机 `UserDefaults`；退出登录会清本地会话
 - 封面 Referer 跟随当前测速选中的域名
+- **如果访问速度慢，请开启 VPN**
