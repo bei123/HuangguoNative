@@ -14,8 +14,9 @@
 
 | 项 | 要求 |
 | --- | --- |
-| Xcode | 16+（Liquid Glass / iOS 26 Tab API 需较新 SDK） |
-| 部署目标 | iOS 17.0+ |
+| Xcode | 26+（Liquid Glass / Tab API） |
+| 部署目标 | **iOS 26.0** |
+| 机型 | **iPhone 11 及更新**（含 iPhone SE 第 2 代及更新）；不支持 XS / XS Max / XR 及更早 |
 | 签名 | Automatic，Bundle ID `com.huangguo.native` |
 
 ```bash
