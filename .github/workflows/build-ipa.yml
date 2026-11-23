@@ -24,11 +24,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Select Xcode
         run: |
-          sudo xcode-select -s /Applications/Xcode.app
+          # 优先用最新已装 Xcode；Liquid Glass 仍可能不可用，靠下方 HG_NO_LIQUID_GLASS 兜底
+          if [ -d /Applications/Xcode.app ]; then
+            sudo xcode-select -s /Applications/Xcode.app
+          fi
+          ls /Applications | grep -i Xcode || true
           xcodebuild -version
 
       - name: Resolve version name
@@ -45,6 +49,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p build
+          # CI 跑在 Xcode 16.x 时没有 Liquid Glass SDK；用编译标志走 material 回退。
+          # 本地用 Xcode 26+ 默认不传该标志，仍编译官方 glassEffect / glassProminent。
           xcodebuild \
             -project "$PROJECT" \
             -scheme "$SCHEME" \
@@ -54,6 +60,8 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
+            IPHONEOS_DEPLOYMENT_TARGET=18.0 \
+            OTHER_SWIFT_FLAGS='$(inherited) -D HG_NO_LIQUID_GLASS' \
             build
 
       - name: Package IPA

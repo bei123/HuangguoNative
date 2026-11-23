@@ -107,7 +107,7 @@ struct MineView: View {
 			Spacer()
 			if !session.isLoggedIn {
 				Button("登录") { path.append(AppRoute.login) }
-					.buttonStyle(.glassProminent)
+					.hgProminentButton()
 					.tint(HGTheme.accent)
 					.frame(minHeight: 44)
 			}

@@ -474,7 +474,7 @@ struct DetailView: View {
 						.font(.subheadline.weight(.semibold))
 						.frame(minWidth: 56, minHeight: 44)
 				}
-				.buttonStyle(.glassProminent)
+				.hgProminentButton()
 				.tint(HGTheme.accent)
 			}
 			.padding(.horizontal, 16)

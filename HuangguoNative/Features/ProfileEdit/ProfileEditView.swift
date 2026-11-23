@@ -28,7 +28,7 @@ struct ProfileEditView: View {
 					}
 					.frame(maxWidth: .infinity, minHeight: 48)
 				}
-				.buttonStyle(.glassProminent)
+				.hgProminentButton()
 				.tint(HGTheme.accent)
 				.disabled(loading)
 

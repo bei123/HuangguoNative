@@ -34,7 +34,7 @@ struct AuthorView: View {
 								Task { await toggleFollow() }
 							}
 							.font(.subheadline.weight(.semibold))
-							.buttonStyle(.glassProminent)
+							.hgProminentButton()
 							.tint(HGTheme.accent)
 							.frame(minHeight: 44)
 						}

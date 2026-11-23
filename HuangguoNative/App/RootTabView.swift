@@ -23,7 +23,9 @@ struct RootTabView: View {
 			}
 		}
 		.tint(HGTheme.accent)
+		#if !HG_NO_LIQUID_GLASS
 		.tabBarMinimizeBehavior(.onScrollDown)
+		#endif
 	}
 
 	@ViewBuilder

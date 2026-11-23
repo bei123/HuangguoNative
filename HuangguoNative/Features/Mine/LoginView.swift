@@ -43,7 +43,7 @@ struct LoginView: View {
 					}
 					.frame(maxWidth: .infinity, minHeight: 48)
 				}
-				.buttonStyle(.glassProminent)
+				.hgProminentButton()
 				.tint(HGTheme.accent)
 				.disabled(loading)
 				.opacity(loading ? 0.7 : 1)
@@ -136,7 +136,7 @@ struct RegisterView: View {
 					}
 					.frame(maxWidth: .infinity, minHeight: 48)
 				}
-				.buttonStyle(.glassProminent)
+				.hgProminentButton()
 				.tint(HGTheme.accent)
 				.disabled(loading)
 				.opacity(loading ? 0.7 : 1)
