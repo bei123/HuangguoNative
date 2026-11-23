@@ -103,13 +103,47 @@ mkdir -p build/Payload && cp -R "$APP" build/Payload/
 ( cd build && zip -r HuangguoNative-unsigned.ipa Payload )
 ```
 
-### 用户怎么装
+### 自签名与安装
 
-1. 下载 `HuangguoNative-unsigned.ipa`
-2. 用 AltStore / Sideloadly 等，登录**自己的** Apple ID 重签并安装  
-3. 免费账号签名一般约 **7 天**需重签；付费开发者账号或企业/超级签另论
+Release / Artifact 里的包是**未签名**的，不能直接装；必须用你自己的 Apple ID（或开发者证书）重签后再装。
 
-> 未签名包不能直接装真机，也不能上架 App Store；仅适合分发后由用户自签。
+#### 方式 A：AltStore / Sideloadly（推荐给普通用户）
+
+1. 从 [Releases](https://github.com/bei123/HuangguoNative/releases) 下载 `HuangguoNative-*-unsigned.ipa`
+2. 电脑安装 [AltStore](https://altstore.io) 或 [Sideloadly](https://sideloadly.io)，用数据线连接 iPhone
+3. 登录**自己的** Apple ID，选择该 IPA 进行重签并安装
+4. 手机首次安装开发者签名 App：  
+   **设置 → 通用 → VPN 与设备管理 → 对应 Apple ID / 开发者 → 信任**
+5. 免费个人账号签名通常约 **7 天**过期，到期后用同一工具重新签名安装即可  
+   （付费 Apple Developer / 企业签 / 超级签有效期更长，另论）
+
+> TrollStore 等永久签方案仅适用于特定系统与设备，自行评估风险。
+
+#### 方式 B：本机 Xcode 开发证书装真机（开发者）
+
+前提：Mac 已登录 Apple ID、Xcode 能自动签名，`DEVELOPMENT_TEAM` 已填（本仓库为 `FP4K7G3F83` 时可改成你自己的 Team），手机已信任此电脑并开启**开发者模式**。
+
+```bash
+# 查看已连接设备 UDID
+xcrun devicectl list devices
+
+UDID="<你的设备 UDID>"
+xcodebuild \
+  -project HuangguoNative.xcodeproj \
+  -scheme HuangguoNative \
+  -configuration Debug \
+  -destination "id=$UDID" \
+  -derivedDataPath build/DeviceDerivedData \
+  CODE_SIGN_STYLE=Automatic \
+  build
+
+APP=build/DeviceDerivedData/Build/Products/Debug-iphoneos/HuangguoNative.app
+xcrun devicectl device install app --device "$UDID" "$APP"
+```
+
+首次打开前同样在手机上信任开发者证书（路径同上）。也可直接在 Xcode 里选真机点 Run。
+
+> 未签名包不能上架 App Store；上述流程仅用于自用 / 测试分发。
 
 ## 说明
 
