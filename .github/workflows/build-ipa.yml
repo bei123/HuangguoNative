@@ -1,5 +1,5 @@
 # 产出「未签名 IPA」，供用户用 AltStore / Sideloadly / 自有证书重签安装。
-# 不上架 App Store，CI 不需要你的 Apple 开发者证书。
+# 推送 v* 标签时，自动创建/更新 GitHub Release，并把 IPA 挂到 Assets。
 
 name: Build IPA (unsigned)
 
@@ -8,6 +8,9 @@ on:
   push:
     tags:
       - "v*"
+
+permissions:
+  contents: write
 
 env:
   SCHEME: HuangguoNative
@@ -27,6 +30,16 @@ jobs:
         run: |
           sudo xcode-select -s /Applications/Xcode.app
           xcodebuild -version
+
+      - name: Resolve version name
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            VER="${GITHUB_REF_NAME}"
+          else
+            VER="dev-${GITHUB_SHA::7}"
+          fi
+          echo "VERSION=$VER" >> "$GITHUB_ENV"
+          echo "IPA_NAME=HuangguoNative-${VER}-unsigned.ipa" >> "$GITHUB_ENV"
 
       - name: Build Release (no code sign)
         run: |
@@ -52,20 +65,34 @@ jobs:
             find build/DerivedData/Build/Products -type d -name '*.app' || true
             exit 1
           fi
-          echo "Packaging: $APP"
+          echo "Packaging: $APP -> $IPA_NAME"
           rm -rf build/Payload build/ipa
           mkdir -p build/Payload build/ipa
           cp -R "$APP" build/Payload/
           (
             cd build
-            zip -r -q "ipa/HuangguoNative-unsigned.ipa" Payload
+            zip -r -q "ipa/${IPA_NAME}" Payload
           )
           ls -lh build/ipa/
 
-      - name: Upload IPA
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: HuangguoNative-unsigned-ipa
           path: build/ipa/*.ipa
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true
+          files: build/ipa/*.ipa
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

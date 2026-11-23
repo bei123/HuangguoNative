@@ -71,9 +71,12 @@ HuangguoNative/
 
 ### GitHub Actions
 
-`.github/workflows/build-ipa.yml`：手动触发或推送 `v*` 标签 → 在 `macos-15` 无签名编译 → 打成 `HuangguoNative-unsigned.ipa` → Artifact 下载。
+`.github/workflows/build-ipa.yml`：
 
-**不需要**配置任何证书 Secrets。
+- **手动触发**：无签名编译 → Artifact 下载  
+- **推送 `v*` 标签**：同上，并自动创建/更新 GitHub **Release**，把 `HuangguoNative-<tag>-unsigned.ipa` 挂到 **Assets**
+
+**不需要**配置任何证书 Secrets（使用默认 `GITHUB_TOKEN` 发 Release）。
 
 ### 本地无签名包
 
