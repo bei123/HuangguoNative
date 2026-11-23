@@ -1,10 +1,14 @@
 # 黄果 · HuangguoNative
 
-原生 SwiftUI iOS 客户端。对接黄果短剧站 `dx150-edge-v1` 加密网关，覆盖浏览、播放、账号与互动。
+原生 SwiftUI **iOS** 客户端。对接黄果短剧站 `dx150-edge-v1` 加密网关，覆盖浏览、播放、账号与互动。
 
-仓库：https://github.com/bei123/HuangguoNative  
+| | |
+| --- | --- |
+| 本仓库 | https://github.com/bei123/HuangguoNative |
+| Android 版（uni-app x） | https://github.com/bei123/Huangguo-Short-Drama-App |
+| 协议 | [MIT](./LICENSE) |
 
-协议：[MIT](./LICENSE)
+> Android 请用 [Huangguo-Short-Drama-App](https://github.com/bei123/Huangguo-Short-Drama-App)；该仓库以 Android 为主，iOS 兼容性不好，本仓库才是正式 iOS 方案。
 
 ## 环境
 
